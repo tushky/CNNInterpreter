@@ -55,6 +55,7 @@ class GradCAM(nn.Module):
                             transforms.Lambda(lambda t: t.unsqueeze(0))
                             ])
         self.hook_last_conv(self)
+        self.hooks = SetHook(cnn, name)
 
     def hook_last_conv(self, name=None):
         model = self.cnn
