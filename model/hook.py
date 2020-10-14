@@ -66,7 +66,7 @@ def set_hook(model, layer_name=None, verbose=False, **kwargs):
     '''
     hooks = []
 
-    def _named_hook(module, parent_name , depth):
+    def _named_hook(module, parent_name, depth):
 
         '''Recursivly search for "target_name" layer in the model and add hook '''
         # For each sub module run the loop
@@ -83,7 +83,7 @@ def set_hook(model, layer_name=None, verbose=False, **kwargs):
                 print(f'{name} layer hooked')
             
             # Recursivly search the module for layer with layer_name
-            self._named_hook(layer, name, depth+1)
+            _named_hook(layer, name, depth+1)
 
     def _last_layer_hook(module, conv, parent_name, depth):
 

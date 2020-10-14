@@ -44,6 +44,9 @@ class ScoreCAM(nn.Module):
         # obtain prediction of network
         pred = self.cnn(img)
 
+        if not index:
+            index = pred.argmax().item()
+
         # obtain output of last conv layer from forward_hook
         cam = self.hooks[0].output.data
 
