@@ -1,4 +1,7 @@
 import os
+import sys
+
+sys.path.insert(1, './utils')
 import math
 import torch
 import torchvision
@@ -29,7 +32,7 @@ class ClassModel(nn.Module):
 
             x = np.zeros((1, 3, 244, 244))
             x += np.reshape([[0.485, 0.456, 0.406]], (1, 3, 1, 1))
-            x = torch.tensor(x, requires_grad=True, dtype=torch.float32)
+            x = torch.Var(x, requires_grad=True, dtype=torch.float32)
 
             optimizer = optim.Adam([x], lr=lr)
 

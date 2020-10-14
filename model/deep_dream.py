@@ -1,4 +1,7 @@
 import os
+import sys
+
+sys.path.insert(1, './utils')
 import math
 import torch
 import copy
@@ -61,7 +64,7 @@ if __name__ == '__main__':
     cnn = models.vgg16(pretrained=True)
     cnn = cnn.features
     #print(cnn)
-    image_path = os.getcwd() + '/test/sky.jpg'
+    image_path = os.getcwd() + '/test/spider.png'
     output_path = os.getcwd() + '/test/maps/output.jpg'
     image = read_image(image_path, 'alexnet')
     model = DeepDream(cnn, 30)

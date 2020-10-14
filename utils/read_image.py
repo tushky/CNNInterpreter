@@ -31,6 +31,6 @@ def tensor_to_image(t, tensor_out = False):
 
 def read_image(path, net='imagenet'):
     image = Image.open(path).convert('RGB')
-    if net == 'imagenet' : preprocess = alexnet_preprocess()
+    preprocess = alexnet_preprocess()
     image = preprocess(image).unsqueeze(dim=0)
     return image

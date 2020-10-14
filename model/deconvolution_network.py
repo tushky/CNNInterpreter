@@ -220,9 +220,9 @@ if __name__ == '__main__' :
     image_path = os.getcwd() + '/test/spider.png'
     image = read_image(image_path, 'imagenet')
     print(image.shape)
-    deconvnet = DeconvNet(imagenet, 29)
-    kernel = 5
-    out = deconvnet(image)
+    deconvnet = DeconvNet(imagenet, 28, True)
+    kernel = 1
+    out = deconvnet(image, kernel)
     print(out.shape)
     output_maps  = torchvision.utils.make_grid(out, nrow=int(math.sqrt(kernel)))
     plt.imshow(output_maps.permute(1, 2, 0))
