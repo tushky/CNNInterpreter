@@ -41,14 +41,14 @@ class Hook:
         self.input = self.forward_input_fn(input) if self.forward_input_fn else input
         self.output = self.forward_output_fn(output) if self.forward_output_fn else output
         self.module = module
-        print(f'{"backward" if self.backward else "forward"} hook executed on layer {self.name}')
+        print(f'forward hook executed on layer {self.name}')
     
     def backward_hook(self, module, input, output):
         self.input = self.backward_input_fn(input) if self.backward_input_fn else input
         self.output = self.backward_output_fn(output) if self.backward_output_fn else output
         self.module = module
 
-        print(f'{"backward" if self.backward else "forward"} hook executed on layer {self.name}')
+        print(f'backward hook executed on layer {self.name}')
         return self.input
 
     def remove(self):
@@ -71,17 +71,14 @@ def set_hook(model, layer_name=None, verbose=False, **kwargs):
         '''Recursivly search for "target_name" layer in the model and add hook '''
         # For each sub module run the loop
         for name, layer in module.named_children():
-
             # Construct name of the module
             name = parent_name + '_' + name if parent_name else name
             if verbose : print('\t'*depth, name)
-
             # if module name is layer_name assign the hook
             if name == layer_name:
                 hooks.append(Hook(name, layer, **kwargs))
                 hooks.append(Hook(name, layer, backward = True, **kwargs))
                 print(f'{name} layer hooked')
-            
             # Recursivly search the module for layer with layer_name
             _named_hook(layer, name, depth+1)
 
@@ -91,29 +88,22 @@ def set_hook(model, layer_name=None, verbose=False, **kwargs):
 
         # For each sub module run the loop
         for name, layer in module.named_children():
-
             # Construct name of the layer
             name = parent_name + '_' + name if parent_name else name
-
             if verbose : print('\t'*depth, name)
-
             # if it is conv layer save its name and reference in conv list
             if isinstance(layer, nn.Conv2d):
                 conv[0], conv[1] = name, layer
-
             # Recursivly search each module
             _last_layer_hook(layer, conv, name, depth+1)
-        
         # return list with name and reference of last conv layer
         return conv
 
     if isinstance(model, torchvision.models.GoogLeNet):
-        name = 'inception5b'
-    
+        name = 'inception5b' 
     # if name is given, run named_hook
     if layer_name:
-        _named_hook(model, '', 0)
-    
+        _named_hook(model, '', 0) 
     # if name is not given seach for last conv layer
     else:
         conv = [None, None]

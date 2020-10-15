@@ -1,7 +1,7 @@
 import os
 import sys
-
 sys.path.insert(1, './utils')
+from utils import postprocess, clamp
 import math
 import torch
 import torchvision
@@ -144,6 +144,7 @@ class DeconvNet(nn.Module):
                 t = layer(t)
                 t *= self.relu_indices[key]
                 relu_layer += 1
+                #t /= 2.
 
             # If it is Conv layer, perform normal forward pass on deconv model
             else:
@@ -187,10 +188,8 @@ class DeconvNet(nn.Module):
 
             # pass constructed input to the deconv model
             out = self.dconv_backward(dconv_input)
-
             # squash deconv output so that visualization is possible
             out = tensor_to_image(out.detach(), True)
-            
             # stack outputs of the decov model
             if i == 0:
                 maps = out.unsqueeze(0)
@@ -217,13 +216,16 @@ class DeconvNet(nn.Module):
 if __name__ == '__main__' :
 
     imagenet = models.vgg16(pretrained=True)
-    image_path = os.getcwd() + '/test/spider.png'
+    image_path = os.getcwd() + '/test/multiple_dogs.jpg'
     image = read_image(image_path, 'imagenet')
     print(image.shape)
-    deconvnet = DeconvNet(imagenet, 28, True)
+    deconvnet = DeconvNet(imagenet, 28, guided=True)
     kernel = 1
     out = deconvnet(image, kernel)
     print(out.shape)
-    output_maps  = torchvision.utils.make_grid(out, nrow=int(math.sqrt(kernel)))
-    plt.imshow(output_maps.permute(1, 2, 0))
+    clamp(out)
+    out = postprocess(out)
+    #output_maps  = torchvision.utils.make_grid(out, nrow=int(math.sqrt(kernel)))
+    #plt.imshow(output_maps.permute(1, 2, 0))
+    plt.imshow(out)
     plt.show()

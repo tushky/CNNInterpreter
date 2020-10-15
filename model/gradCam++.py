@@ -19,7 +19,7 @@ import pickle
 from utils import postprocess
 from classes import classes as class_labels
 
-class GradCAM(nn.Module):
+class GradCAMPlus(nn.Module):
 
     def __init__(self, cnn, name=None):
 
@@ -67,19 +67,29 @@ class GradCAM(nn.Module):
         # allow gradients for target vector
         target.require_grad=True
         # obtain loss for the class "index"
-        loss = torch.sum(pred*target)
+        loss = torch.exp(torch.sum(pred*target))
         # remove previous gradients
         self.cnn.zero_grad()
         # obtain gradients
         loss.backward(retain_graph=True)
         # obtain graients for the last conv layer from the backward_hook
         grad = self.hooks[1].output[0].data
-        # obtain weights for each feature map of last conv layer using gradients of that layer
-        grad = torch.mean(grad, (2, 3), keepdim=True)
+        # get second order derivative
+        grad_2 = grad ** 2
+        # get third order derivative
+        grad_3 = grad ** 3
+        # get global average of gradients of each feature map
+        grad_3_mul = torch.mean(grad, (2, 3), keepdim=True)
+        # prepare for alpha denominator
+        grad_3 = grad_3 * grad_3_mul
+        # get alpha
+        alpha = grad_2 / (2 * grad_2 + grad_3 + 1e-06)
+        # get final weights of each feature map
+        weight = (alpha * self.relu(grad)).sum((2, 3), keepdim=True)
         # obtain output of last conv layer from the forward_hook
         conv_out = self.hooks[0].output.data
         # obtain weighed feature maps, keep possitive influence only
-        cam = self.relu((conv_out * grad).sum(1, keepdim=True))
+        cam = self.relu(conv_out * weight).sum(1, keepdim=True)
         # resize weighted feature maps to th size of input image
         cam = nn.functional.interpolate(cam, scale_factor=t.shape[2] // cam.shape[2], mode='bilinear', align_corners=False)
         # remove batch and channel dims
@@ -106,7 +116,7 @@ class GradCAM(nn.Module):
             plt.imshow(cam, cmap='jet')
             plt.imshow(img, alpha=0.5)
             # save overlapping output
-            plt.savefig('grad_cam.png', bbox_inches='tight')
+            plt.savefig('grad_cam++.png', bbox_inches='tight')
             plt.show()
     
     def top_five(self, t):
@@ -124,13 +134,13 @@ class GradCAM(nn.Module):
             plt.imshow(cam, cmap='jet')
             plt.imshow(img, alpha=0.5)
 
-            plt.savefig('grad_cam.png', bbox_inches='tight')
+            plt.savefig('grad_cam_plus.png', bbox_inches='tight')
             plt.show()
 
 
 if __name__ == '__main__':
 
-    cnn = torchvision.models.resnet34(pretrained=True)
-    cam = GradCAM(cnn)
-    image = read_image(os.getcwd()+'/test/dogs.jpg')
+    cnn = torchvision.models.googlenet(pretrained=True)
+    cam = GradCAMPlus(cnn)
+    image = read_image(os.getcwd()+'/test/spider.png')
     cam.show_cam(image)

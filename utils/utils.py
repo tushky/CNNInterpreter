@@ -11,6 +11,7 @@ def preprocess(image):
     '''
     transform = transforms.Compose(
                 [
+                    transforms.Resize(224),
                     # Reshape to size 224 X 224
                     transforms.CenterCrop(224),
                     # Convert to torch tensor
@@ -82,4 +83,3 @@ if __name__ == '__main__':
     print(t)
     t = blur(t, sigma=0.5)
     print(t)
-

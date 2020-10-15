@@ -2,6 +2,7 @@ import os
 import sys
 
 sys.path.insert(1, './utils')
+from utils import postprocess
 import math
 import torch
 import torchvision
@@ -26,6 +27,8 @@ image = read_image(image_path, 'imagenet')
 image.requires_grad=True
 
 conv_out = {}
+
+
 def get_output(output):
     print(output.shape)
     conv_out[0] = output.detach()
@@ -62,5 +65,5 @@ loss.backward()
 print(hooks)
 for hook in hooks:
     hook.remove()
-plt.imshow(torchvision.utils.make_grid(image.grad.detach(), normalize=True).permute(1, 2, 0))
+plt.imshow(postprocess(image.grad.detach()))
 plt.show()

@@ -6,6 +6,7 @@ import torch
 
 def alexnet_preprocess():
     return transforms.Compose([
+        transforms.Resize(224),
         transforms.CenterCrop(224),
         transforms.ToTensor(),
         transforms.Normalize(
