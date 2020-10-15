@@ -69,7 +69,7 @@ class CAM(nn.Module):
 if __name__ == '__main__':
 
     cnn = torchvision.models.googlenet(pretrained=True)
-    cam = CAM(cnn, 'inception5b')
+    cam = CAM(cnn)
     print(os.getcwd())
     image = read_image(os.getcwd()+'/test/spider.png')
 

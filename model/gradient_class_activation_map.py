@@ -14,7 +14,6 @@ import torchvision.transforms.functional as TF
 from scipy import ndimage
 import os
 from read_image import read_image, tensor_to_image
-from sign_classification import SignNet
 import pickle
 from utils import postprocess
 from classes import classes as class_labels
@@ -132,5 +131,5 @@ if __name__ == '__main__':
 
     cnn = torchvision.models.resnet34(pretrained=True)
     cam = GradCAM(cnn)
-    image = read_image(os.getcwd()+'/test/dogs.jpg')
+    image = read_image(os.getcwd()+'/test/cat.jpg')
     cam.show_cam(image)

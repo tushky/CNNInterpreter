@@ -74,9 +74,9 @@ class GradCAMPlus(nn.Module):
         loss.backward(retain_graph=True)
         # obtain graients for the last conv layer from the backward_hook
         grad = self.hooks[1].output[0].data
-        # get second order derivative
+        # get second order derivative (kind of)
         grad_2 = grad ** 2
-        # get third order derivative
+        # get third order derivative (kind of)
         grad_3 = grad ** 3
         # get global average of gradients of each feature map
         grad_3_mul = torch.mean(grad, (2, 3), keepdim=True)
@@ -142,5 +142,5 @@ if __name__ == '__main__':
 
     cnn = torchvision.models.googlenet(pretrained=True)
     cam = GradCAMPlus(cnn)
-    image = read_image(os.getcwd()+'/test/spider.png')
+    image = read_image(os.getcwd()+'/test/cat.jpg')
     cam.show_cam(image)

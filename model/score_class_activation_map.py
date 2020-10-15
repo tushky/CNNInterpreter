@@ -125,5 +125,5 @@ if __name__ == '__main__':
     cnn = torchvision.models.resnet34(pretrained=True)
     cam = ScoreCAM(cnn)
     print(os.getcwd())
-    image = read_image(os.getcwd()+'/test/spider.png')
+    image = read_image(os.getcwd()+'/test/horse.jpg')
     cam.show_cam(image, 281)
