@@ -1,5 +1,4 @@
 # CNNInterpreter
-<<<<<<< HEAD
 ### Collection of populer Convolutional Neural Network (CNN) interpretation methods useful for debugging and understanding predictions of CNN.
 
 ## This package contains implementation of following methods
@@ -50,7 +49,3 @@
 		</tr>
 	</tbody>
 </table>
-=======
-Collection of populer Convolutional Neural Network (CNN) interpretation methods useful for debugging and understanding predictions of CNN.
-
->>>>>>> 470babcd3a09be80b40bf30552b3a95c2bae20c8
