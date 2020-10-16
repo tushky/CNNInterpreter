@@ -74,7 +74,7 @@ class ClassActivationMaps:
         plt.imshow(cam, cmap='jet')
         plt.imshow(img, alpha=0.5)
         # save overlapping output
-        plt.savefig(f'{method}.png', bbox_inches='tight')
+        plt.savefig(f'./data/resnet34_horse_{method}.png', bbox_inches='tight')
         plt.show()
 
 
@@ -230,12 +230,19 @@ class ClassActivationMaps:
         return cam
 
 if __name__ == '__main__':
-    model = torchvision.models.resnet18(pretrained=True)
+    model = torchvision.models.alexnet(pretrained=True)
     #model = torch.hub.load('pytorch/vision:v0.6.0', 'shufflenet_v2_x1_0', pretrained=True)
-    image = read_image(os.getcwd()+'/test/spider.png')
+    file_name = 'dogs.jpg'
+    image = read_image(os.getcwd()+'/test/'+file_name)
     cam = ClassActivationMaps(model)
+    #cam.show_cam(image, method='cam')
     cam.show_cam(image, method='gradcam')
-    #cam.show_cam(image, method='gradcam', class_index=281)
-    #cam.show_cam(image, method='gradcam++', class_index=281)
-    #cam.show_cam(image, method='scorecam', class_index=281)
+    cam.show_cam(image, method='gradcam++')
+    #cam.show_cam(image, method='scorecam')
+    image = postprocess(image)
+    plt.gcf().set_size_inches(8, 8)
+    plt.axis('off')
+    plt.imshow(image)
+    plt.savefig('./data/'+file_name, bbox_inches='tight')
+    plt.show()
         
