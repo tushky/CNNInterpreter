@@ -2,6 +2,7 @@ import os
 import sys
 
 sys.path.insert(1, './utils')
+from utils import jitter
 import math
 import torch
 import copy
@@ -18,6 +19,8 @@ import matplotlib.pyplot as plt
 from read_image import read_image, tensor_to_image
 from torchvision.utils import make_grid, save_image
 from scipy.ndimage import gaussian_filter
+
+
 class DeepDream(nn.Module):
 
     def __init__(self, cnn, level_number):

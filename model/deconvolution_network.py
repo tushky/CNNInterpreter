@@ -59,10 +59,27 @@ class DeconvNet(nn.Module):
             
             # If it is a Conv layer, construct Transposed Conv layer for the deconv net
             if isinstance(layer,  nn.Conv2d):
-                self.conv_model[f'conv_{num_conv}'] = layer
-                dconv_layer = nn.ConvTranspose2d(layer.out_channels, layer.in_channels, layer.kernel_size, layer.stride, layer.padding)
+
+                conv_layer = nn.Conv2d(layer.out_channels,
+                                        layer.in_channels,
+                                        layer.kernel_size,
+                                        layer.stride,
+                                        layer.padding
+                                        )
+
+                dconv_layer = nn.ConvTranspose2d(layer.out_channels,
+                                                layer.in_channels,
+                                                layer.kernel_size,
+                                                layer.stride,
+                                                layer.padding
+                                                )
+
                 dconv_layer.weight.data = layer.weight.data
+                conv_layer.weight.data = layer.weight.data
+                conv_layer.bias.data = layer.bias.data
+
                 self.dconv_model[f'dconv_{num_conv}'] = dconv_layer
+                self.conv_model[f'conv_{num_conv}'] = conv_layer
                 num_conv += 1
 
             # If it is a ReLU layer, copy layer for the deconv net
@@ -74,10 +91,19 @@ class DeconvNet(nn.Module):
             # If it is a MaxPool layer, set return_indices True so that
             # it returns indices of possitive elements
             if isinstance(layer, nn.MaxPool2d):
-                layer.return_indices = True
-                maxunpool = nn.MaxUnpool2d(layer.kernel_size, layer.stride, layer.padding)
-                self.conv_model[f'pool_{num_pool}'] = layer
-                self.dconv_model[f'unpool_{num_pool}'] = maxunpool
+                
+                maxpool = nn.MaxPool2d(layer.kernel_size,
+                                       layer.stride,
+                                       layer.padding
+                                       )
+
+                maxpool.return_indices = True
+
+                self.conv_model[f'pool_{num_pool}'] = maxpool
+                self.dconv_model[f'unpool_{num_pool}'] = nn.MaxUnpool2d(layer.kernel_size,
+                                                                        layer.stride,
+                                                                        layer.padding
+                                                                        )
                 num_pool += 1
             i += 1
         
@@ -185,7 +211,6 @@ class DeconvNet(nn.Module):
 
         # Construct input for deconv model and obtain its outputs
         for i, dconv_input in tqdm(enumerate(self.construct_dconv_input(t, num_kernel))):
-
             # pass constructed input to the deconv model
             out = self.dconv_backward(dconv_input)
             # squash deconv output so that visualization is possible
@@ -198,28 +223,14 @@ class DeconvNet(nn.Module):
         
         return maps
 
-    def prediction(self, t):
-        
-        for layer in self.cnn.features:
-
-            if isinstance(layer, nn.MaxPool2d) and layer.return_indices:
-                t, _ = layer(t)
-            else:
-                t = layer(t)
-        t = self.cnn.avgpool(t)
-        t = t.view(1, -1)
-        t = self.cnn.classifier(t)
-        return t.argmax().item()
-
-
 
 if __name__ == '__main__' :
 
-    imagenet = models.vgg16(pretrained=True)
+    imagenet = models.alexnet(pretrained=True)
     image_path = os.getcwd() + '/test/multiple_dogs.jpg'
     image = read_image(image_path, 'imagenet')
     print(image.shape)
-    deconvnet = DeconvNet(imagenet, 28, guided=True)
+    deconvnet = DeconvNet(imagenet, 9, guided=True)
     kernel = 1
     out = deconvnet(image, kernel)
     print(out.shape)
