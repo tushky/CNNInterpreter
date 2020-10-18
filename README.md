@@ -49,3 +49,37 @@
 		</tr>
 	</tbody>
 </table>
+
+## Deconvolution Network Based Methods
+
+1. DeconvNet
+2. Guided Backpropogation
+
+<table border=0 >
+	<tbody>
+    <tr>
+			<td width="10%"> Layer Number </td>
+            <td align="center"> Top 5 Filters </td>
+		</tr>
+		<tr>
+			<td width="10%"> 10 </td>
+            <td width="90%"> <img src="./data/clock_deconv_output_layer_10.png"> </td>
+		</tr>
+        <tr>
+            <td width="10%"> 15 </td>
+            <td width="90%"> <img src="./data/clock_deconv_output_layer_15.png"> </td>
+		</tr>
+		<tr>
+           <td width="10%"> 20 </td>
+            <td width="90%"> <img src="./data/clock_deconv_output_layer_20.png"> </td>
+		</tr>
+		<tr>
+            <td width="10%"> 25 </td>
+            <td width="90%"> <img src="./data/clock_deconv_output_layer_25.png"> </td>
+		</tr>
+		<tr>
+            <td width="10%"> 28 </td>
+            <td width="90%"> <img src="./data/clock_deconv_output_layer_28.png"> </td>
+		</tr>
+	</tbody>
+</table>

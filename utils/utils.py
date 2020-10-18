@@ -36,12 +36,14 @@ def postprocess(t):
 
     transform = transforms.Compose(
         [
+            transforms.Lambda(lambda x: clamp(x)),
             # Remove normalization using imagenet stats
             transforms.Lambda(lambda t : t*std.view(1, -1, 1, 1) + mean.view(1, -1, 1, 1)),
             # Remove batch dimention
+            #transforms.Lambda(lambda  x: (x - x.min())/(x.max() - x.min() + 1e-06)),
             transforms.Lambda(lambda t: t.squeeze(0)),
             # Convert to PIL image
-            transforms.ToPILImage()
+            #transforms.ToPILImage()
         ]
     )
     return transform(t)

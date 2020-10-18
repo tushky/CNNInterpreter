@@ -226,17 +226,20 @@ class DeconvNet(nn.Module):
 
 if __name__ == '__main__' :
 
-    imagenet = models.alexnet(pretrained=True)
-    image_path = os.getcwd() + '/test/multiple_dogs.jpg'
+    imagenet = models.vgg16(pretrained=True)
+    image_path = os.getcwd() + '/test/clock.jpg'
     image = read_image(image_path, 'imagenet')
     print(image.shape)
-    deconvnet = DeconvNet(imagenet, 9, guided=True)
-    kernel = 1
-    out = deconvnet(image, kernel)
-    print(out.shape)
-    clamp(out)
-    out = postprocess(out)
-    #output_maps  = torchvision.utils.make_grid(out, nrow=int(math.sqrt(kernel)))
-    #plt.imshow(output_maps.permute(1, 2, 0))
-    plt.imshow(out)
+    output_layer = 10
+    deconvnet = DeconvNet(imagenet, output_layer, guided=True)
+    kernel = 5
+    output = deconvnet(image, kernel)
+    print(output.shape)
+    #clamp(out)
+    output_images = torch.stack([postprocess(img.unsqueeze(0)) for img in output], dim=0)
+    output_maps  = torchvision.utils.make_grid(output_images, nrow=5, normalize=True)
+    plt.gcf().set_size_inches(20, 4)
+    plt.axis('off')
+    plt.imshow(output_maps.permute(1, 2, 0))
+    plt.savefig('./data/'+f'deconv_output_layer_{output_layer}', bbox_inches='tight')
     plt.show()
