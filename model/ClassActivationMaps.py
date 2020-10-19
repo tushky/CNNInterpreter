@@ -14,13 +14,43 @@ import torchvision.transforms.functional as TF
 from scipy import ndimage
 import os
 import pickle
-from utils import postprocess, read_image
+from utils import postprocess, read_image, process_deconv_output
 from classes import classes as class_labels
 from torch.nn.functional import relu, softmax
 from tqdm import tqdm
-
+from deconvolution_network import DeconvNet
 
 class ClassActivationMaps:
+
+    """
+        Generate Class Activation Maps for the input image using one of the following methods.
+            - Class Activation Maps (CAM)
+            - Gradient weighted Class Activation Maps (Grad-CAM)
+            - Gradient weighted Class Activation Maps++ (Grad-CAM++)
+            - Score weighted Class Activation Maps (Score-CAM)
+        
+        Args:
+            model (nn.Module): any pretrained convolutional neural network.
+                CAM method only works with the model where the last last layer is
+                Globalavgpool layer followed by one Linear layer.
+            layer_name(str or None): name of the conv layer you want to visualize.
+                If not provided, the last occuring conv layer in the model will be used
+        
+        Attributes:
+            model (nn.Module): the pretrained network
+            layer_name(str or none): name of the conv layer
+            hooks (list): contains handles for forward and backward hooks
+            interractive (bool): determines wether to remove the hooks after obtaining cam.
+            methods (list): list of acceptable methods
+        
+        Example::
+
+            model = torchvision.models.resnet34(pretrained=True)
+            image = read_image('test.img')
+            cam = ClassActivationMaps(model)
+            cam.show_cam(image, method='gradcam++')
+
+    """
 
     def __init__(self, model, layer_name=None):
         self.model = model
@@ -29,59 +59,14 @@ class ClassActivationMaps:
         self.hooks = None
         self.interactive = False
         self.methods = ['cam', 'gradcam', 'gradcam++', 'scorecam']
-    
-    def get_cam(self, t, method, class_index=None):
-
-        if method not in self.methods:
-            raise ValueError(f'invalid method name {method},\
-                 plese choose one of the following method: cam, gradcam, gradcam++, scorecam')
-
-        if not self.hooks:
-            self.hooks = set_hook(self.model, self.layer_name)
-        
-        if method == 'cam' : cam_map = self.cam(t, class_index)
-        if method == 'gradcam' : cam_map = self.gradcam(t, class_index)
-        if method == 'gradcam++' : cam_map = self.gradcamplus(t, class_index)
-        if method == 'scorecam' : cam_map = self.scorecam(t, class_index)
-
-        # Remove hooks from last layer just in case if you train your model after obtaining CAM
-        if not self.interactive:
-            for hook in self.hooks:
-                hook.remove()
-            self.hooks = None
-        # resize it to the shape of input image
-        cam_map = nn.functional.interpolate(cam_map, size=(t.shape[2], t.shape[3]), mode='bilinear', align_corners=False)
-        
-        # remove batch and channel dimention
-        cam_map = cam_map.squeeze(0).squeeze(0)
-
-        # Normalize
-        #cam_map -= cam_map.min()
-        cam_map /= (cam_map.max() + 1e-09)
-
-        return cam_map
-    
-    def show_cam(self, t, class_index=None, method='gradcam'):
-
-        # specify size of the image
-        plt.gcf().set_size_inches(8, 8)
-        plt.axis('off')
-        # plot CAM
-        cam = self.get_cam(t, method, class_index)
-        img = postprocess(t)
-        # plot input image
-        plt.imshow(cam, cmap='jet')
-        plt.imshow(img, alpha=0.5)
-        # save overlapping output
-        plt.savefig(f'./data/resnet34_clock_{method}.png', bbox_inches='tight')
-        plt.show()
-
 
     def cam(self, t, class_index):
+
         # obtain prediction for the given image
         with torch.no_grad():
             pred = self.model(t)
-        #print(f'predicted class : {pred.argmax().item()}')
+        print(f'predicted class : {pred.argmax().item()}')
+
         # if index is not provided use the class index with the largest logit value
         if not class_index:
             class_index = pred.argmax().item()
@@ -92,10 +77,7 @@ class ClassActivationMaps:
         weight = list(self.model.named_children())[-1][1].weight.data
 
         weight = weight.t()
-        #print(cam.shape)
-        print(weight.shape)
         cam = cam @ weight[:, [class_index]]
-        #print(cam.shape)
         cam = cam.permute(0, 3, 1, 2)
 
         return cam
@@ -156,11 +138,13 @@ class ClassActivationMaps:
         # Second order derivative of score of class 'c' with respect to output of last conv layer.
         # Since secod order derivative of relu layer is zero,
         # the formula is simplified to just square of the first order derivative.
-        grad_2 = grad ** 2
+        grad_2 = loss.item() * (grad ** 2)
         # Third order derivative of score of class 'c' with respect to output of last conv layer.
         # Since secod and third order derivative of relu layer is zero,
         # the formula is simplified to just cube of the first order derivative.
-        grad_3 = grad ** 3
+        grad_3 = loss.item() * (grad ** 3)
+
+        grad *= loss.item()
         # get global average of gradients of each feature map
         grad_3_sum = torch.mean(grad, (2, 3), keepdim=True)
         # prepare for alpha denominator
@@ -238,16 +222,75 @@ class ClassActivationMaps:
         cam = (relu(cam * tscores)).sum(1, keepdim=True)
 
         return cam
+    
+    def get_guided_cam(self, t, method, class_index=None, guided=True):
+
+        cam = self.get_cam(t, method, class_index)
+        deconvnet = DeconvNet(self.model, self.layer_name, guided=True)
+        maps = deconvnet.get_maps(t, 1)
+        output_images = torch.stack([process_deconv_output(img.unsqueeze(0)) * cam.unsqueeze(0) for img in maps], dim=0)
+        output_maps  = torchvision.utils.make_grid(output_images, nrow=5, normalize=False)
+        plt.gcf().set_size_inches(4, 4)
+        plt.axis('off')
+        plt.imshow(output_maps.permute(1, 2, 0))
+        plt.show()
+        
+    
+    def get_cam(self, t, method, class_index=None):
+
+        if method not in self.methods:
+            raise ValueError(f'invalid method name {method},\
+                 plese choose one of the following method: cam, gradcam, gradcam++, scorecam')
+
+        if not self.hooks:
+            self.hooks = set_hook(self.model, self.layer_name)
+        
+        if method == 'cam' : cam_map = self.cam(t, class_index)
+        if method == 'gradcam' : cam_map = self.gradcam(t, class_index)
+        if method == 'gradcam++' : cam_map = self.gradcamplus(t, class_index)
+        if method == 'scorecam' : cam_map = self.scorecam(t, class_index)
+
+        # Remove hooks from last layer just in case if you train your model after obtaining CAM
+        if not self.interactive:
+            for hook in self.hooks:
+                hook.remove()
+            self.hooks = None
+        # resize it to the shape of input image
+        cam_map = nn.functional.interpolate(cam_map, size=(t.shape[2], t.shape[3]), mode='bilinear', align_corners=False)
+        
+        # remove batch and channel dimention
+        cam_map = cam_map.squeeze(0).squeeze(0)
+
+        # Normalize
+        #cam_map -= cam_map.min()
+        cam_map /= (cam_map.max() + 1e-09)
+
+        return cam_map
+    
+    def show_cam(self, t, class_index=None, method='gradcam'):
+
+        # specify size of the image
+        plt.gcf().set_size_inches(8, 8)
+        plt.axis('off')
+        # plot CAM
+        cam = self.get_cam(t, method, class_index)
+        img = postprocess(t)
+        # plot input image
+        plt.imshow(cam, cmap='jet')
+        plt.imshow(img, alpha=0.5)
+        # save overlapping output
+        plt.savefig(f'./data/resnet34_clock_{method}.png', bbox_inches='tight')
+        plt.show()
 
 if __name__ == '__main__':
-    model = torchvision.models.resnet34(pretrained=True)
+    model = torchvision.models.alexnet(pretrained=True)
     #model = torch.hub.load('pytorch/vision:v0.6.0', 'shufflenet_v2_x1_0', pretrained=True)
-    file_name = 'horse.jpg'
+    file_name = 'bird.jpeg'
     image = read_image(os.getcwd()+'/test/'+file_name)
-    cam = ClassActivationMaps(model)
+    cam = ClassActivationMaps(model, layer_name='features_8')
     #cam.show_cam(image, method='cam')
     #cam.show_cam(image, method='gradcam')
-    cam.show_cam(image, method='gradcam')
+    cam.get_guided_cam(image, method='gradcam')
     #cam.show_cam(image, method='scorecam')
     #image = postprocess(image)
     #plt.gcf().set_size_inches(8, 8)

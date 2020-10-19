@@ -44,6 +44,9 @@ class DeconvNet(nn.Module):
         travel pretrained model layer by layer and construct deconvolution network
         '''
 
+        if not hasattr(self.cnn, 'features'):
+            raise TypeError('Make sure all Conv layers are in model.features dict')
+
         self.conv_model = OrderedDict()
         self.dconv_model = OrderedDict()
 
@@ -51,8 +54,13 @@ class DeconvNet(nn.Module):
         
         num_conv, num_relu, num_pool = 1, 1, 1
 
+        if type(self.layer_num) is str:
+            try:
+                self.layer_num = int(self.layer_num.split('_')[1])
+            except:
+                raise ValueError(f'invalid layer name {self.layer_num}')
         while i <= self.layer_num:
-
+    
             layer = self.cnn.features[i]
             
             # If it is a Conv layer, construct Transposed Conv layer for the deconv net
@@ -81,14 +89,14 @@ class DeconvNet(nn.Module):
                 num_conv += 1
 
             # If it is a ReLU layer, copy layer for the deconv net
-            if isinstance(layer, nn.ReLU):
+            elif isinstance(layer, nn.ReLU):
                 self.conv_model[f'relu_{num_relu}'] = layer
                 self.dconv_model[f'unrelu_{num_relu}'] = layer
                 num_relu += 1
 
             # If it is a MaxPool layer, set return_indices True so that
             # it returns indices of possitive elements
-            if isinstance(layer, nn.MaxPool2d):
+            elif isinstance(layer, nn.MaxPool2d):
                 
                 maxpool = nn.MaxPool2d(layer.kernel_size,
                                        layer.stride,
@@ -103,6 +111,9 @@ class DeconvNet(nn.Module):
                                                                         layer.padding
                                                                         )
                 num_pool += 1
+            
+            else:
+                raise TypeError(f'Network with layer {layer.__class__} is not supported by DecovNet')
             i += 1
         
         # Construct forward pass model
@@ -201,7 +212,6 @@ class DeconvNet(nn.Module):
             #print(index, max_activation[i][0])
             dconv_input[0, max_activation[i][0], index[0], index[1]] = t[0, max_activation[i][0], index[0], index[1]]
             #dconv_input[0, max_activation[i][0], index[0], index[1]] = 1.0
-            #print(torch.nonzero(dconv_input))
             yield dconv_input
     
     def get_maps(self, t, num_kernel=1):
@@ -239,9 +249,9 @@ class DeconvNet(nn.Module):
 
 if __name__ == '__main__' :
 
-    imagenet = models.vgg16(pretrained=True)
+    imagenet = models.alexnet(pretrained=True)
     image_path = os.getcwd() + '/test/clock.jpg'
     image = read_image(image_path)
-    layer_number=28
+    layer_number=6
     deconvnet = DeconvNet(imagenet, layer_number, guided=True)
-    output = deconvnet.show_maps(image, layer_number, 5, path=True)
+    deconvnet.show_maps(image, layer_number, 5, path=True)

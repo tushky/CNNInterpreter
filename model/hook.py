@@ -100,7 +100,7 @@ def set_hook(model, layer_name=None, verbose=False, **kwargs):
         return conv
 
     if isinstance(model, torchvision.models.GoogLeNet):
-        name = 'inception5b' 
+        layer_name = 'inception5b' 
     # if name is given, run named_hook
     if layer_name:
         _named_hook(model, '', 0) 
@@ -111,5 +111,8 @@ def set_hook(model, layer_name=None, verbose=False, **kwargs):
         hooks.append(Hook(conv[0], conv[1], **kwargs)) 
         hooks.append(Hook(conv[0], conv[1], backward=True, **kwargs)) 
         print(f'{conv[0]} layer hooked')
+    
+    if not hooks:
+        raise ValueError(f'Invalid layer name {layer_name}')
 
     return hooks

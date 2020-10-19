@@ -17,9 +17,9 @@ def preprocess(image):
     '''
     transform = transforms.Compose(
                 [
-                    transforms.Resize(224),
+                    transforms.Resize(256),
                     # Reshape to size 224 X 224
-                    #transforms.CenterCrop(224),
+                    transforms.CenterCrop(224),
                     # Convert to torch tensor
                     transforms.ToTensor(),
                     # Normalize with imagenet stats
@@ -48,7 +48,7 @@ def process_deconv_output(t):
             # Remove batch dimention
             transforms.Lambda(lambda t: t.squeeze(0)),
             transforms.ToPILImage(),
-            transforms.Lambda(lambda img: ImageEnhance.Contrast(img).enhance(4)),
+            transforms.Lambda(lambda img: ImageEnhance.Contrast(img).enhance(3)),
             transforms.ToTensor()
         ]
     )

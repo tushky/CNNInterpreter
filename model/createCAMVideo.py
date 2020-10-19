@@ -15,10 +15,9 @@ method = 'gradcam++'
 for i in tqdm(range(132)):
     file_name = f'frame{i}.jpg'
     image = read_image(os.getcwd()+'/test/frames/'+file_name)
-    cam.get_cam(image, method)
     plt.gcf().set_size_inches(8, 8)
     plt.axis('off')
-    out = cam.get_cam(image, method)
+    out = cam.get_cam(image, method, class_index=236)
     img = postprocess(image)
     # plot input image
     plt.imshow(out, cmap='jet')
