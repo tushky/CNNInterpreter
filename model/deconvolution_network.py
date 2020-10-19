@@ -1,7 +1,7 @@
 import os
 import sys
 sys.path.insert(1, './utils')
-from utils import postprocess, clamp
+from utils import process_deconv_output, clamp, read_image
 import math
 import torch
 import torchvision
@@ -13,7 +13,7 @@ from torchvision import models
 import torch.nn.functional as F
 from collections import OrderedDict
 import matplotlib.pyplot as plt
-from read_image import read_image, tensor_to_image
+from read_image import tensor_to_image
 from torchvision.utils import make_grid, save_image
 
 class DeconvNet(nn.Module):
@@ -24,7 +24,7 @@ class DeconvNet(nn.Module):
     layer_num : layer number from which you want to perform deconvolution
     guided : set True if you want to perform guided backpropogation
     '''
-    def __init__(self, cnn, layer_num, guided=False):
+    def __init__(self, cnn, layer_number, guided=False):
 
         super().__init__()
 
@@ -32,10 +32,8 @@ class DeconvNet(nn.Module):
         self.cnn = cnn
         self.cnn.eval()
         
-        # From which layer we want to perform deconvolution
-        self.layer_num = layer_num
-
         self.guided = guided
+        self.layer_num = layer_number
 
         # Construct deconv net from input model
         self.construct_dconvnet()
@@ -125,27 +123,27 @@ class DeconvNet(nn.Module):
         # Create dict to remember indices of positive output of MaxPool and ReLU layers during forward pass
         self.pool_indices = {}
         self.relu_indices = {}
+        with torch.no_grad():
+            for layer in self.conv_model:
+                
+                # If it is MaxPool layer, remember indices of positive output
+                if isinstance(layer, nn.MaxPool2d):
+                    t, self.pool_indices[f'unpool_{pool_layer}'] = layer(t)
+                    pool_layer += 1
 
-        for layer in self.conv_model:
+                # If it is ReLU layer, remember indices of positive output
+                # Required for Guided Backpropogation only
+                elif self.guided and isinstance(layer, nn.ReLU):
+                    t = layer(t)
+                    self.relu_indices[f'unrelu_{relu_layer}'] = torch.where(t > 0, torch.tensor([1]), torch.tensor([0]))
+                    relu_layer += 1
+
+                # If it is Conv layer, perform normal forward pass
+                else:
+                    t = layer(t)
             
-            # If it is MaxPool layer, remember indices of positive output
-            if isinstance(layer, nn.MaxPool2d):
-                t, self.pool_indices[f'unpool_{pool_layer}'] = layer(t)
-                pool_layer += 1
-
-            # If it is ReLU layer, remember indices of positive output
-            # Required for Guided Backpropogation only
-            elif self.guided and isinstance(layer, nn.ReLU):
-                t = layer(t)
-                self.relu_indices[f'unrelu_{relu_layer}'] = torch.where(t > 0, torch.tensor([1]), torch.tensor([0]))
-                relu_layer += 1
-
-            # If it is Conv layer, perform normal forward pass
-            else:
-                t = layer(t)
-        
-        # return output of the specified layer number
-        return t
+            # return output of the specified layer number
+            return t
     
     def dconv_backward(self, t):
 
@@ -156,26 +154,26 @@ class DeconvNet(nn.Module):
 
         pool_layer = 1
         relu_layer = 1
+        with torch.no_grad():
+            for key, layer in self.dconv_model.named_children():
+                
+                # if it is MaxPool layer, pass the stored indices of possitive output
+                if isinstance(layer, nn.MaxUnpool2d):
+                    t = layer(t, self.pool_indices[key])
+                    pool_layer += 1
+                
+                # If it is ReLU layer, use the stored indices of forward pass of conv net
+                #  to remove negative values
+                elif self.guided and isinstance(layer, nn.ReLU):
+                    t = layer(t)
+                    t *= self.relu_indices[key]
+                    relu_layer += 1
+                    #t /= 2.
 
-        for key, layer in self.dconv_model.named_children():
-            
-            # if it is MaxPool layer, pass the stored indices of possitive output
-            if isinstance(layer, nn.MaxUnpool2d):
-                t = layer(t, self.pool_indices[key])
-                pool_layer += 1
-            
-            # If it is ReLU layer, use the stored indices of forward pass of conv net
-            #  to remove negative values
-            elif self.guided and isinstance(layer, nn.ReLU):
-                t = layer(t)
-                t *= self.relu_indices[key]
-                relu_layer += 1
-                #t /= 2.
-
-            # If it is Conv layer, perform normal forward pass on deconv model
-            else:
-                t = layer(t)
-        return t
+                # If it is Conv layer, perform normal forward pass on deconv model
+                else:
+                    t = layer(t)
+            return t
 
     def construct_dconv_input(self, t, num_kernel=9):
 
@@ -200,11 +198,13 @@ class DeconvNet(nn.Module):
         for i in range(num_kernel):
             dconv_input = torch.zeros_like(t)
             index = np.unravel_index(max_activation[i][2], (t.shape[2], t.shape[3]))
-            dconv_input[0, max_activation[i][0], index] = t[0, max_activation[i][0], index]
-            #dconv_input[0, max_activation[i][0], index] = 1.0
+            #print(index, max_activation[i][0])
+            dconv_input[0, max_activation[i][0], index[0], index[1]] = t[0, max_activation[i][0], index[0], index[1]]
+            #dconv_input[0, max_activation[i][0], index[0], index[1]] = 1.0
+            #print(torch.nonzero(dconv_input))
             yield dconv_input
     
-    def forward(self, t, num_kernel=1):
+    def get_maps(self, t, num_kernel=1):
 
         # Obtain output of the conv model
         t = self.conv_forward(t)
@@ -222,24 +222,26 @@ class DeconvNet(nn.Module):
                 maps = torch.cat((maps, out.unsqueeze(0)),dim=0)
         
         return maps
+    
+    def show_maps(self, image, output_layer, num_kernels = 1, path=False):
+
+        output = self.get_maps(image, num_kernels)
+        output_images = torch.stack([process_deconv_output(img.unsqueeze(0)) for img in output], dim=0)
+        output_maps  = torchvision.utils.make_grid(output_images, nrow=5, normalize=False)
+        plt.gcf().set_size_inches(4*num_kernels, 4)
+        plt.axis('off')
+        plt.imshow(output_maps.permute(1, 2, 0))
+        if path:
+            plt.savefig('./data/'+f'clock_deconv_output_layer_{output_layer}', bbox_inches='tight')
+            #plt.savefig(path, bbox_inches='tight')
+        plt.show()
 
 
 if __name__ == '__main__' :
 
     imagenet = models.vgg16(pretrained=True)
     image_path = os.getcwd() + '/test/clock.jpg'
-    image = read_image(image_path, 'imagenet')
-    print(image.shape)
-    output_layer = 10
-    deconvnet = DeconvNet(imagenet, output_layer, guided=True)
-    kernel = 5
-    output = deconvnet(image, kernel)
-    print(output.shape)
-    #clamp(out)
-    output_images = torch.stack([postprocess(img.unsqueeze(0)) for img in output], dim=0)
-    output_maps  = torchvision.utils.make_grid(output_images, nrow=5, normalize=True)
-    plt.gcf().set_size_inches(20, 4)
-    plt.axis('off')
-    plt.imshow(output_maps.permute(1, 2, 0))
-    plt.savefig('./data/'+f'deconv_output_layer_{output_layer}', bbox_inches='tight')
-    plt.show()
+    image = read_image(image_path)
+    layer_number=28
+    deconvnet = DeconvNet(imagenet, layer_number, guided=True)
+    output = deconvnet.show_maps(image, layer_number, 5, path=True)

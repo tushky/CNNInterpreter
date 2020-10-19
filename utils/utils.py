@@ -1,9 +1,15 @@
 import torch
 from scipy.ndimage.filters import gaussian_filter1d
 import torchvision.transforms as transforms
+from PIL import Image, ImageEnhance
 
 mean = [0.485, 0.456, 0.406]
 std  = [0.229, 0.224, 0.225]
+
+def read_image(path):
+    image = Image.open(path).convert('RGB')
+    return preprocess(image)
+
 def preprocess(image):
 
     '''
@@ -13,20 +19,20 @@ def preprocess(image):
                 [
                     transforms.Resize(224),
                     # Reshape to size 224 X 224
-                    transforms.CenterCrop(224),
+                    #transforms.CenterCrop(224),
                     # Convert to torch tensor
                     transforms.ToTensor(),
                     # Normalize with imagenet stats
                     transforms.Normalize(
                         mean=[0.485, 0.456, 0.406],
                         std=[0.229, 0.224, 0.225]
-                    )
+                    ),
+                    transforms.Lambda(lambda x: x.unsqueeze(0))
                 ]
             )
     return transform(image)
 
-def postprocess(t):
-
+def process_deconv_output(t):
     '''
     accepts tensor of shape [B, C, H, W] processed with imagenet stats and convert it to PIL image
     '''
@@ -40,10 +46,33 @@ def postprocess(t):
             # Remove normalization using imagenet stats
             transforms.Lambda(lambda t : t*std.view(1, -1, 1, 1) + mean.view(1, -1, 1, 1)),
             # Remove batch dimention
+            transforms.Lambda(lambda t: t.squeeze(0)),
+            transforms.ToPILImage(),
+            transforms.Lambda(lambda img: ImageEnhance.Contrast(img).enhance(4)),
+            transforms.ToTensor()
+        ]
+    )
+    return transform(t)
+
+
+def postprocess(t):
+
+    '''
+    accepts tensor of shape [B, C, H, W] processed with imagenet stats and convert it to PIL image
+    '''
+
+    mean=torch.tensor([0.485, 0.456, 0.406])
+    std=torch.tensor([0.229, 0.224, 0.225])
+
+    transform = transforms.Compose(
+        [
+            # Remove normalization using imagenet stats
+            transforms.Lambda(lambda t : t*std.view(1, -1, 1, 1) + mean.view(1, -1, 1, 1)),
+            # Remove batch dimention
             #transforms.Lambda(lambda  x: (x - x.min())/(x.max() - x.min() + 1e-06)),
             transforms.Lambda(lambda t: t.squeeze(0)),
             # Convert to PIL image
-            #transforms.ToPILImage()
+            transforms.ToPILImage()
         ]
     )
     return transform(t)

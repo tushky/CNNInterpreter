@@ -22,7 +22,7 @@ from hook import Hook, set_hook
 
 imagenet = models.vgg16(pretrained=True)
 imagenet.eval()
-image_path = os.getcwd() + '/test/cat_dog.png'
+image_path = os.getcwd() + '/test/birds.jpg'
 image = read_image(image_path, 'imagenet')
 image.requires_grad=True
 
@@ -52,7 +52,7 @@ def get_input(input):
     # Construct "num_kernel" number of input tensor for deconv model
     dconv_input = torch.zeros_like(t)
     index = np.unravel_index(max_activation[0][2], (t.shape[2], t.shape[3]))
-    dconv_input[0, max_activation[0][0], index] = t[0, max_activation[0][0], index]
+    dconv_input[0, max_activation[0][0], index[0], index[1]] = t[0, max_activation[0][0], index[0], index[1]]
     #dconv_input[0, max_activation[i][0], index] = 1.0
     return (dconv_input, input[1], input[2])
 
@@ -65,5 +65,5 @@ loss.backward()
 print(hooks)
 for hook in hooks:
     hook.remove()
-plt.imshow(postprocess(image.grad.detach()))
+plt.imshow(postprocess(image.grad.detach()).permute(1, 2, 0))
 plt.show()

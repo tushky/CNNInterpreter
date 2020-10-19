@@ -13,9 +13,8 @@ from PIL import Image
 import torchvision.transforms.functional as TF
 from scipy import ndimage
 import os
-from read_image import read_image, tensor_to_image
 import pickle
-from utils import postprocess
+from utils import postprocess, read_image
 from classes import classes as class_labels
 from torch.nn.functional import relu, softmax
 from tqdm import tqdm
@@ -49,7 +48,7 @@ class ClassActivationMaps:
         if not self.interactive:
             for hook in self.hooks:
                 hook.remove()
-                self.hooks = None
+            self.hooks = None
         # resize it to the shape of input image
         cam_map = nn.functional.interpolate(cam_map, size=(t.shape[2], t.shape[3]), mode='bilinear', align_corners=False)
         
@@ -57,7 +56,7 @@ class ClassActivationMaps:
         cam_map = cam_map.squeeze(0).squeeze(0)
 
         # Normalize
-        cam_map -= cam_map.min()
+        #cam_map -= cam_map.min()
         cam_map /= (cam_map.max() + 1e-09)
 
         return cam_map
@@ -74,7 +73,7 @@ class ClassActivationMaps:
         plt.imshow(cam, cmap='jet')
         plt.imshow(img, alpha=0.5)
         # save overlapping output
-        plt.savefig(f'./data/resnet34_horse_{method}.png', bbox_inches='tight')
+        plt.savefig(f'./data/resnet34_clock_{method}.png', bbox_inches='tight')
         plt.show()
 
 
@@ -82,7 +81,7 @@ class ClassActivationMaps:
         # obtain prediction for the given image
         with torch.no_grad():
             pred = self.model(t)
-        print(f'predicted class : {pred.argmax().item()}')
+        #print(f'predicted class : {pred.argmax().item()}')
         # if index is not provided use the class index with the largest logit value
         if not class_index:
             class_index = pred.argmax().item()
@@ -93,10 +92,10 @@ class ClassActivationMaps:
         weight = list(self.model.named_children())[-1][1].weight.data
 
         weight = weight.t()
-        print(cam.shape)
+        #print(cam.shape)
         print(weight.shape)
         cam = cam @ weight[:, [class_index]]
-        print(cam.shape)
+        #print(cam.shape)
         cam = cam.permute(0, 3, 1, 2)
 
         return cam
@@ -116,7 +115,7 @@ class ClassActivationMaps:
         # allow gradients for target vector
         target.require_grad=True
         # obtain loss for the class "index"
-        loss = torch.sum(pred*target)
+        loss = torch.sum(pred * target)
         # remove previous gradients
         self.model.zero_grad()
         # obtain gradients
@@ -163,13 +162,24 @@ class ClassActivationMaps:
         # the formula is simplified to just cube of the first order derivative.
         grad_3 = grad ** 3
         # get global average of gradients of each feature map
-        grad_3_mul = torch.mean(grad, (2, 3), keepdim=True)
+        grad_3_sum = torch.mean(grad, (2, 3), keepdim=True)
         # prepare for alpha denominator
-        grad_3 = grad_3 * grad_3_mul
+        grad_3 = grad_3 * grad_3_sum
         # get alpha
-        alpha_denom = 2 * grad_2 + grad_3
-        alpha_denom = torch.where(alpha_denom != 0.0, alpha_denom, torch.ones(alpha_denom.shape))
-        alpha = torch.div(grad_2, alpha_denom)
+        
+        alpha_d = 2 * grad_2 + grad_3
+        
+        torch.where(alpha_d != 0.0, alpha_d, torch.Tensor([1.0]))
+        alpha = torch.div(grad_2, alpha_d+1e-06)
+        
+        alpha_t = torch.where(relu(grad)>0, alpha, torch.Tensor([0.0]))
+        
+        alpha_c = torch.sum(alpha_t, dim=(2, 3), keepdim=True)
+        
+        alpha_cn = torch.where(alpha_c !=0, alpha_c, torch.Tensor([1.0]))
+        
+        alpha /= alpha_cn
+    
         # get final weights of each feature map
         weight = (alpha * relu(grad)).sum((2, 3), keepdim=True)
         # obtain output of last conv layer from the forward_hook
@@ -230,19 +240,19 @@ class ClassActivationMaps:
         return cam
 
 if __name__ == '__main__':
-    model = torchvision.models.alexnet(pretrained=True)
+    model = torchvision.models.resnet34(pretrained=True)
     #model = torch.hub.load('pytorch/vision:v0.6.0', 'shufflenet_v2_x1_0', pretrained=True)
-    file_name = 'dogs.jpg'
+    file_name = 'horse.jpg'
     image = read_image(os.getcwd()+'/test/'+file_name)
     cam = ClassActivationMaps(model)
     #cam.show_cam(image, method='cam')
+    #cam.show_cam(image, method='gradcam')
     cam.show_cam(image, method='gradcam')
-    cam.show_cam(image, method='gradcam++')
     #cam.show_cam(image, method='scorecam')
-    image = postprocess(image)
-    plt.gcf().set_size_inches(8, 8)
-    plt.axis('off')
-    plt.imshow(image)
-    plt.savefig('./data/'+file_name, bbox_inches='tight')
-    plt.show()
+    #image = postprocess(image)
+    #plt.gcf().set_size_inches(8, 8)
+    #plt.axis('off')
+    #plt.imshow(image)
+    #plt.savefig('./data/'+file_name, bbox_inches='tight')
+    #plt.show()
         
