@@ -33,7 +33,7 @@ class ClassActivationMaps:
             model (nn.Module): any pretrained convolutional neural network.
                 CAM method only works with the model where the last last layer is
                 Globalavgpool layer followed by one Linear layer.
-            layer_name(str or None): name of the conv layer you want to visualize.
+            layer_name (str or None): name of the conv layer you want to visualize.
                 If not provided, the last occuring conv layer in the model will be used
         
         Attributes:

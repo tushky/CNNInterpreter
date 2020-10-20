@@ -1,11 +1,11 @@
 import os
 import sys
-
 sys.path.insert(1, './utils')
 from utils import jitter
 import math
 import torch
 import copy
+import random
 import torchvision
 import numpy as np
 from tqdm import tqdm
@@ -36,9 +36,9 @@ class DeepDream(nn.Module):
 
         for i in tqdm(range(100)):
             x.requires_grad = True
-
+            ox, oy = random.randint(0, 50), random.randint(0, 50)
             t = x
-
+            t = jitter(t, ox, oy)
             for name, layer in self.cnn.named_children():
                 t = layer(t)
                 if name == str(self.level_number):
@@ -57,6 +57,7 @@ class DeepDream(nn.Module):
             print(f"Grad min : {grad.min()}, max : {grad.max()}")
             grad = np.transpose(grad, (2, 0, 1))
             x = x.detach()
+            x = jitter(x, -ox, -oy)
             x[0,:] += 0.1 * grad
             x = torch.clamp(x, min=-3, max=3)
 

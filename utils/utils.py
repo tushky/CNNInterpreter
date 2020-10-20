@@ -42,13 +42,13 @@ def process_deconv_output(t):
 
     transform = transforms.Compose(
         [
-            transforms.Lambda(lambda x: clamp(x)),
+            #transforms.Lambda(lambda x: clamp(x)),
             # Remove normalization using imagenet stats
             transforms.Lambda(lambda t : t*std.view(1, -1, 1, 1) + mean.view(1, -1, 1, 1)),
             # Remove batch dimention
             transforms.Lambda(lambda t: t.squeeze(0)),
             transforms.ToPILImage(),
-            transforms.Lambda(lambda img: ImageEnhance.Contrast(img).enhance(3)),
+            #transforms.Lambda(lambda img: ImageEnhance.Contrast(img).enhance(3)),
             transforms.ToTensor()
         ]
     )
