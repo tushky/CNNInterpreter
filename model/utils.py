@@ -17,7 +17,7 @@ def preprocess(image):
     '''
     transform = transforms.Compose(
                 [
-                    transforms.Resize(256),
+                    transforms.Resize(224),
                     # Reshape to size 224 X 224
                     transforms.CenterCrop(224),
                     # Convert to torch tensor
@@ -45,11 +45,13 @@ def process_deconv_output(t):
             #transforms.Lambda(lambda x: clamp(x)),
             # Remove normalization using imagenet stats
             transforms.Lambda(lambda t : t*std.view(1, -1, 1, 1) + mean.view(1, -1, 1, 1)),
+            transforms.Lambda(lambda t : (t - t.min())),
+            transforms.Lambda(lambda t : t / (t.max() + 1e-05)),
             # Remove batch dimention
             transforms.Lambda(lambda t: t.squeeze(0)),
-            transforms.ToPILImage(),
+            #transforms.ToPILImage(),
             #transforms.Lambda(lambda img: ImageEnhance.Contrast(img).enhance(3)),
-            transforms.ToTensor()
+            #transforms.ToTensor()
         ]
     )
     return transform(t)

@@ -1,6 +1,5 @@
 import os
 import sys
-sys.path.insert(1, './utils')
 import torch
 from hook import set_hook
 import torch.nn as nn
@@ -18,7 +17,7 @@ from utils import postprocess, read_image, process_deconv_output
 from classes import classes as class_labels
 from torch.nn.functional import relu, softmax
 from tqdm import tqdm
-from deconvolution_network import DeconvNet
+from DeconvolutionNetwork import DeconvolutionNetwork as DeconvNet
 
 class ClassActivationMaps:
 
@@ -283,14 +282,14 @@ class ClassActivationMaps:
         plt.show()
 
 if __name__ == '__main__':
-    model = torchvision.models.alexnet(pretrained=True)
+    model = torchvision.models.resnet34(pretrained=True)
     #model = torch.hub.load('pytorch/vision:v0.6.0', 'shufflenet_v2_x1_0', pretrained=True)
     file_name = 'bird.jpeg'
     image = read_image(os.getcwd()+'/test/'+file_name)
-    cam = ClassActivationMaps(model, layer_name='features_8')
+    cam = ClassActivationMaps(model)
     #cam.show_cam(image, method='cam')
     #cam.show_cam(image, method='gradcam')
-    cam.get_guided_cam(image, method='gradcam')
+    cam.show_cam(image, method='cam', class_index=10)
     #cam.show_cam(image, method='scorecam')
     #image = postprocess(image)
     #plt.gcf().set_size_inches(8, 8)
