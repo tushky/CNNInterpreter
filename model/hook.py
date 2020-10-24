@@ -1,4 +1,7 @@
-import torch
+"""
+Created by : Tushar Gadhiya
+"""
+
 import torch.nn as nn
 import torchvision
 
@@ -11,7 +14,7 @@ class Hook:
     layer : nn.Module object
     backward : set True if you want to assign backward pass
     '''
-    
+
     def __init__(
                     self, name, layer,
                     backward=False,
@@ -21,7 +24,9 @@ class Hook:
                     backward_output_fn = None
                 ):
 
-        
+        self.input = None
+        self.output = None
+        self.module = None
         self.name = name
         self.backward = backward
         self.forward_input_fn = forward_input_fn
@@ -35,23 +40,36 @@ class Hook:
         else:
             print(f'forward hook set on layer {self.name}')
             self.hook = layer.register_forward_hook(self.forward_hook)
-            
-    def forward_hook(self, module, input, output):
 
-        self.input = self.forward_input_fn(input) if self.forward_input_fn else input
-        self.output = self.forward_output_fn(output) if self.forward_output_fn else output
+    def forward_hook(self, module, inputs, outputs):
+
+        '''
+            store input/output of the module during forward pass
+        '''
+
+        self.input = self.forward_input_fn(inputs) if self.forward_input_fn else inputs
+        self.output = self.forward_output_fn(outputs) if self.forward_output_fn else outputs
         self.module = module
         print(f'forward hook executed on layer {self.name}')
-    
-    def backward_hook(self, module, input, output):
-        self.input = self.backward_input_fn(input) if self.backward_input_fn else input
-        self.output = self.backward_output_fn(output) if self.backward_output_fn else output
+
+    def backward_hook(self, module, inputs, outputs):
+
+        '''
+            stores gradients of the module during backward pass
+        '''
+
+        self.input = self.backward_input_fn(inputs) if self.backward_input_fn else inputs
+        self.output = self.backward_output_fn(outputs) if self.backward_output_fn else outputs
         self.module = module
 
         print(f'backward hook executed on layer {self.name}')
         return self.input
 
     def remove(self):
+
+        '''
+            remove forward/backward hook from the module
+        '''
         self.hook.remove()
         print(f'{"backward" if self.backward else "forward"} hook on layer {self.name} removed')
 
@@ -73,7 +91,8 @@ def set_hook(model, layer_name=None, verbose=False, **kwargs):
         for name, layer in module.named_children():
             # Construct name of the module
             name = parent_name + '_' + name if parent_name else name
-            if verbose : print('\t'*depth, name)
+            if verbose:
+                print('\t'*depth, name)
             # if module name is layer_name assign the hook
             if name == layer_name:
                 hooks.append(Hook(name, layer, **kwargs))
@@ -84,13 +103,17 @@ def set_hook(model, layer_name=None, verbose=False, **kwargs):
 
     def _last_layer_hook(module, conv, parent_name, depth):
 
-        '''Recursively search for last occuring conv layer in the model and return its name and layer'''
+        '''
+        Recursively search for last occuring conv layer
+        in the model and return its name and layer
+        '''
 
         # For each sub module run the loop
         for name, layer in module.named_children():
             # Construct name of the layer
             name = parent_name + '_' + name if parent_name else name
-            if verbose : print('\t'*depth, name)
+            if verbose:
+                print('\t'*depth, name)
             # if it is conv layer save its name and reference in conv list
             if isinstance(layer, nn.Conv2d):
                 conv[0], conv[1] = name, layer
@@ -100,18 +123,18 @@ def set_hook(model, layer_name=None, verbose=False, **kwargs):
         return conv
 
     if isinstance(model, torchvision.models.GoogLeNet):
-        layer_name = 'inception5b' 
+        layer_name = 'inception5b'
     # if name is given, run named_hook
     if layer_name:
-        _named_hook(model, '', 0) 
+        _named_hook(model, '', 0)
     # if name is not given seach for last conv layer
     else:
         conv = [None, None]
         conv = _last_layer_hook(model, conv, '', 0)
-        hooks.append(Hook(conv[0], conv[1], **kwargs)) 
-        hooks.append(Hook(conv[0], conv[1], backward=True, **kwargs)) 
+        hooks.append(Hook(conv[0], conv[1], **kwargs))
+        hooks.append(Hook(conv[0], conv[1], backward=True, **kwargs))
         print(f'{conv[0]} layer hooked')
-    
+
     if not hooks:
         raise ValueError(f'Invalid layer name {layer_name}')
 
