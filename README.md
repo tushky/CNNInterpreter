@@ -27,6 +27,16 @@ tqdm
 
 ### API:
 
+	Generate Class Activation Maps for the input image. It supports following methods
+		- Class Activation Maps (CAM)
+		- Gradient weighted Class Activation Maps (Grad-CAM)
+		- Gradient weighted Class Activation Maps++ (Grad-CAM++)
+		- Score weighted Class Activation Maps (Score-CAM)
+		- Guided CAM
+		- Guided Grad-CAM
+		- Guided Grad-CAM++
+		- Guided Score-CAM
+
 	Args:
         model (nn.Module): any pretrained convolutional neural network.
         layer_name (str or None): name of the conv layer you want to visualize.
