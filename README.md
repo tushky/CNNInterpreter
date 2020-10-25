@@ -14,8 +14,36 @@
 9. Guided CAM, Grad-CAM, Grad-CAM++, Score-CAM
 10. Deep Dream
 
+### Requirements:
+PyTorch
+numpy
+scipy
+PIL
+matplotlib
+tqdm
+
 
 ## Class Activation Map Based Methods
+
+### API:
+
+	Args:
+        model (nn.Module): any pretrained convolutional neural network.
+        layer_name (str or None): name of the conv layer you want to visualize.
+            If None, the last occuring conv layer in the model will be used.
+
+    Attributes:
+        model (nn.Module): the pretrained network
+        layer_name(str or none): name of the conv layer
+        hooks (list): contains handles for forward and backward hooks
+        interractive (bool): determines wether to remove the hooks after obtaining cam.
+        methods (list): list of acceptable methods
+
+    Example:
+        model = torchvision.models.resnet34(pretrained=True)
+        image = read_image('test.img')
+        cam = ClassActivationMaps(model)
+        cam.show_cam(image, method='gradcam++')
 
 <table border=0 >
 	<tbody>
@@ -126,6 +154,8 @@
 </table>
 
 ## Sensitivity Maps Based Methods
+
+### API
 
 ### Integrated Gradients
 
@@ -242,6 +272,24 @@
 
 ## Deconvolution Network Based Methods
 
+### API
+        Creates Deconvolution Network from pretrained ConvNet.
+        It supports two methods
+            - Standerd Deconvolution Network
+            - Guided Backpropogation
+        Args:
+            model (nn.Module): any pretrained convolutional neural network.
+                Deconvoltion Netowork can be generated for model which contains only
+                Conv, Maxpool, ReLU or Batchnorm layer.
+                We assume that all feature extracting layers are in model.features dict
+            guided (bool): It True it will create DeconvNet for guided backpropogation.
+                Otherwise we create standard DeconvNet
+        Example::
+
+            model = torchvision.models.vgg16(pretrained=True)
+            image = read_image('test.img')
+            cam = DeconvolutionNetwork(model, guided=True)
+            cam.show_maps(image, target_layer = 'features_28')
 ### Guided Backpropogation
 
 <table border=0 >
