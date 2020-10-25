@@ -4,12 +4,13 @@ Created by : Tushar Gadhiya
 
 import os
 import torch
+from torch.utils.data import DataLoader
 from torchvision import models
 import numpy as np
 import matplotlib.pyplot as plt
-from utils import read_image
+from utils import read_image, intergrated_inputs, noisy_inputs
 
-add_noise = lambda t, std: t + torch.randn(t.size()) * std
+
 
 class SensitivityMaps:
 
@@ -24,41 +25,38 @@ class SensitivityMaps:
         self.cnn = cnn
         self.cnn.eval()
 
-    def smooth_grad(self, image, num_imgs=50, std=.8, colored=True):
+    def smooth_grad(self, image, num_imgs=50, std=.8, colored=True, batch_size=64):
 
         """
             implimentation of SmoothGrad
         """
-        images = []
 
-        for _ in range(num_imgs):
-            images.append(add_noise(image, std))
-        images = torch.cat(images, dim=0)
+        images = noisy_inputs(image, std, num_imgs)
+        dataloader = DataLoader(images, batch_size)
+        gradients = []
+        for imgs in dataloader:
+            gradients.append(self.get_grad(imgs))
+        gradients = torch.cat(gradients, dim=0)
+        gradients = gradients.mean(dim=0, keepdim=True)
+        gradients = self.normalize_grad(gradients, colored)
+        return gradients
 
-        grad = self.get_grad(images)
-        grad = grad.mean(dim=0, keepdim=True)
-        grad = self.normalize_grad(grad, colored)
-        return grad
-
-    def integrated_grad(self, image, num_steps=100, colored=True):
+    def integrated_grad(self, image, num_steps=100, baseline=0, colored=True, batch_size=64):
 
         """
         Implimentation of integrated gradient method
         """
 
-        images = []
-
-        for i in range(num_steps):
-            images.append(image * (i / num_steps))
-
-        images = torch.cat(images, dim=0)
-
-        grad = self.get_grad(images)
-        #grad = grad * images.detach()
-        grad = grad.mean(dim=0, keepdim=True)
-        grad = grad * image
-        grad = self.normalize_grad(grad, colored)
-        return grad
+        images = intergrated_inputs(image, num_steps, baseline)
+        dataloader = DataLoader(images, batch_size=batch_size)
+        gradients = []
+        for imgs in dataloader:
+            gradients.append(self.get_grad(imgs))
+        gradients = torch.cat(gradients, dim=0)
+        gradients = gradients.mean(dim=0, keepdim=True)
+        gradients = gradients * (image - baseline)
+        gradients = self.normalize_grad(gradients, colored)
+        return gradients
 
     def saliency_map(self, image, colored):
 
@@ -124,7 +122,7 @@ class SensitivityMaps:
             raise ValueError('Invalid method name {method}')
 
 
-    def show_map(self, image, method='smooth', colored=False):
+    def show_map(self, image, method='smooth', colored=False, path=None):
 
         """
             Display sensitivity map of selected method
@@ -136,14 +134,20 @@ class SensitivityMaps:
             plt.imshow(s_map[0].permute(1, 2, 0), cmap='gray')
         else:
             plt.imshow(s_map, cmap='gray')
-        plt.show()
+        if path:
+            try:
+                plt.savefig(path, bbox_inches='tight')
+            except ValueError:
+                print(f'invalid path {path}, unable to save file')
+        #plt.show()
+        plt.cla()
 
 
 if __name__ == '__main__':
 
-    image_path = os.getcwd() + '/test/ante.jpeg'
-    output_path = os.getcwd() + '/test/maps/output.jpg'
+    image_path = os.getcwd() + '/images/snake.jpg'
+    output_path = os.getcwd() + '/images/maps/output.jpg'
     img = read_image(image_path)
     model = models.vgg16(pretrained=True)
     net = SensitivityMaps(model)
-    net.show_map(img, method='integrated', colored=True)
+    net.show_map(img, method='smooth', colored=False)

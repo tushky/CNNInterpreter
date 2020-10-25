@@ -264,10 +264,10 @@ class DeconvolutionNetwork:
         plt.gcf().set_size_inches(4*num_kernels, 4)
         plt.axis('off')
         plt.imshow(output_maps.permute(1, 2, 0))
-        if path and False:
-            plt.savefig('./data/'+f'clock_deconv_output_layer_{target_layer}', bbox_inches='tight')
+        if path:
             plt.savefig(path, bbox_inches='tight')
-        plt.show()
+        #plt.show()
+        plt.cla()
 
 if __name__ == '__main__':
 

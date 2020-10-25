@@ -66,7 +66,6 @@ class Hook:
         return self.input
 
     def remove(self):
-
         '''
             remove forward/backward hook from the module
         '''

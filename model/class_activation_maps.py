@@ -6,6 +6,7 @@ import os
 
 import torch
 import torch.nn as nn
+from torch.utils.data import DataLoader
 from torch.nn.functional import relu, softmax
 
 import torchvision
@@ -27,25 +28,23 @@ class ClassActivationMaps:
             - Gradient weighted Class Activation Maps++ (Grad-CAM++)
             - Score weighted Class Activation Maps (Score-CAM)
 
-        Args:
-            model (nn.Module): any pretrained convolutional neural network.
-                CAM method only works with the model where the last last layer is
-                Globalavgpool layer followed by one Linear layer.
-            layer_name (str or None): name of the conv layer you want to visualize.
-                If not provided, the last occuring conv layer in the model will be used
+    Args:
+        model (nn.Module): any pretrained convolutional neural network.
+        layer_name (str or None): name of the conv layer you want to visualize.
+            If None, the last occuring conv layer in the model will be used.
 
-        Attributes:
-            model (nn.Module): the pretrained network
-            layer_name(str or none): name of the conv layer
-            hooks (list): contains handles for forward and backward hooks
-            interractive (bool): determines wether to remove the hooks after obtaining cam.
-            methods (list): list of acceptable methods
+    Attributes:
+        model (nn.Module): the pretrained network
+        layer_name(str or none): name of the conv layer
+        hooks (list): contains handles for forward and backward hooks
+        interractive (bool): determines wether to remove the hooks after obtaining cam.
+        methods (list): list of acceptable methods
 
-        Example:
-            model = torchvision.models.resnet34(pretrained=True)
-            image = read_image('test.img')
-            cam = ClassActivationMaps(model)
-            cam.show_cam(image, method='gradcam++')
+    Example:
+        model = torchvision.models.resnet34(pretrained=True)
+        image = read_image('test.img')
+        cam = ClassActivationMaps(model)
+        cam.show_cam(image, method='gradcam++')
     """
 
     def __init__(self, model, layer_name=None):
@@ -58,8 +57,18 @@ class ClassActivationMaps:
 
 
     def cam(self, tensor, class_index):
+
         """
-            Implimentation of venilla Class Activation Map.
+            Implimentation of vanilla Class Activation Map. Works on specific type
+            of CNN network only. Last two layer of the network must have to be
+            globalavgpool layer followed by single fully connected layer. For example
+            it will not work on VGG16 or AlexNet. but it will work on ResNet or GoogleNet.
+
+        Args:
+            tensor (torch.tensor): input image tensor.
+            class_index (int or None): index of class for which class activation map
+                will be generated. If None the class with the largest logit value will
+                be used.
         """
         # obtain prediction for the given image
         with torch.no_grad():
@@ -70,7 +79,7 @@ class ClassActivationMaps:
         if not class_index:
             class_index = pred.argmax().item()
 
-        class_activation_map = self.hooks[0].output.data
+        class_activation_map = self.hooks[0].output.data.mean(dim=0, keepdim=True)
         class_activation_map = class_activation_map.permute(0, 2, 3, 1)
 
         weight = list(self.model.named_children())[-1][1].weight.data
@@ -82,10 +91,17 @@ class ClassActivationMaps:
         return class_activation_map
 
 
-    def gradcam(self, tensor, class_index=None):
+    def gradcam(self, tensor, class_index):
 
         """
-            Implimentation of gradient weighted class activation maps(Grad-CAM)
+            Implimentation of gradient weighted class activation maps (Grad-CAM).
+            It generalizes vanilla class activation maps and removes the limitation
+            on the structure of the network.
+        Args:
+            tensor (torch.tensor): input image tensor.
+            class_index (int or None): index of class for which class activation map
+                will be generated. If None the class with the largest logit value will
+                be used.
         """
 
         # obtain prediction for the given image
@@ -108,9 +124,9 @@ class ClassActivationMaps:
         # obtain graients for the last conv layer from the backward_hook
         grad = self.hooks[1].output[0].data
         # obtain weights for each feature map of last conv layer using gradients of that layer
-        grad = torch.mean(grad, (2, 3), keepdim=True)
+        grad = torch.mean(grad, (0, 2, 3), keepdim=True)
         # obtain output of last conv layer from the forward_hook
-        conv_out = self.hooks[0].output.data
+        conv_out = self.hooks[0].output.data.mean(dim=0, keepdim=True)
         # obtain weighed feature maps, keep possitive influence only
         class_activation_map = relu((conv_out * grad).sum(1, keepdim=True))
 
@@ -120,9 +136,16 @@ class ClassActivationMaps:
     def gradcamplus(self, tensor, class_index):
 
         """
-        Implimnetation of gradient weighted class activation map++ (Grad-CAM++)
+            Implimentation of gradient weighted class activation maps++ (Grad-CAM++).
+            It generalizes Grad-CAM and by extention CAM. It produces better visualization
+            by considering pixels.
+        Args:
+            tensor (torch.tensor): input image tensor.
+            class_index (int or None): index of class for which class activation map
+                will be generated. If None the class with the largest logit value will
+                be used.
         """
-
+        a = torch.Tensor([1.1])
         pred = self.model(tensor)
         print(f'predicted class : {pred.argmax().item()}')
         target = torch.zeros_like(pred)
@@ -134,7 +157,8 @@ class ClassActivationMaps:
         # allow gradients for target vector
         target.require_grad=True
         # obtain loss for the class "class_index"
-        loss = torch.exp(torch.sum(pred*target))
+        #loss = torch.exp(torch.sum(pred*target))
+        loss = a ** torch.sum(pred*target)
         # remove previous gradients
         self.model.zero_grad()
         # obtain gradients
@@ -142,23 +166,23 @@ class ClassActivationMaps:
         # obtain graients for the last conv layer from the backward_hook
         # grad = dY_c/dA
         # First order derivative of score of class 'c' with respect to output of last conv layer.
-        grad = self.hooks[1].output[0].data
+        grad = self.hooks[1].output[0].data.mean(dim=0, keepdim=True)
         # Second order derivative of score of class 'c' with respect to output of last conv layer.
         # Since secod order derivative of relu layer is zero,
         # the formula is simplified to just square of the first order derivative.
-        grad_2 = loss.item() * (grad ** 2)
+        grad_2 = (grad ** 2)
         # Third order derivative of score of class 'c' with respect to output of last conv layer.
         # Since secod and third order derivative of relu layer is zero,
         # the formula is simplified to just cube of the first order derivative.
-        grad_3 = loss.item() * (grad ** 3)
-        grad *= loss.item()
+        grad_3 = (grad ** 3) * torch.log(a)
+        #grad *= loss.item()
         # get global average of gradients of each feature map
         grad_3_sum = torch.mean(grad, (2, 3), keepdim=True)
         # prepare for alpha denominator
         grad_3 = grad_3 * grad_3_sum
         # get alpha
         alpha_d = 2 * grad_2 + grad_3
-        torch.where(alpha_d != 0.0, alpha_d, torch.Tensor([1.0]))
+        alpha_d = torch.where(alpha_d != 0.0, alpha_d, torch.Tensor([1.0]))
         alpha = torch.div(grad_2, alpha_d+1e-06)
         alpha_t = torch.where(relu(grad)>0, alpha, torch.Tensor([0.0]))
         alpha_c = torch.sum(alpha_t, dim=(2, 3), keepdim=True)
@@ -167,7 +191,7 @@ class ClassActivationMaps:
         # get final weights of each feature map
         weight = (alpha * relu(grad)).sum((2, 3), keepdim=True)
         # obtain output of last conv layer from the forward_hook
-        conv_out = self.hooks[0].output.data
+        conv_out = self.hooks[0].output.data.mean(dim=0, keepdim=True)
         # obtain weighed feature maps, keep possitive influence only
         class_activation_map = relu(conv_out * weight).sum(1, keepdim=True)
 
@@ -177,8 +201,17 @@ class ClassActivationMaps:
     def scorecam(self, tensor, class_index, batch_size=64):
 
         """
-            Implimnetation of score weighted class activation map (Score-CAM)
+            Implimentation of score weighted class activation map (Score-CAM).
+            Unlike gradient based CAM (CAM, Grad-CAM, Grad-CAM++), Score-CAM does
+            not uses gradients.
+        Args:
+            tensor (torch.tensor): input image tensor.
+            class_index (int or None): index of class for which class activation map
+                will be generated. If None the class with the largest logit value will
+                be used.
+            batch_size = batch size used for calculating scores of the masked inputs.
         """
+        assert (tensor.shape[0]==1), f'Invalid input shape, batch dim should be 1 for scorecam'
 
         # obtain prediction of network
         pred = self.model(tensor)
@@ -211,14 +244,16 @@ class ClassActivationMaps:
 
         masked_inputs = torch.cat(masked_inputs, dim=0)
 
+        dataloader = DataLoader(masked_inputs, batch_size=batch_size)
         # obtain prediction of model for each masked input image
         with torch.no_grad():
-            for i in tqdm(range(masked_inputs.shape[0]//batch_size)):
-                if i == 0:
-                    scores = self.model(masked_inputs[batch_size*i:batch_size*(i+1),...])
-                else:
-                    scores = torch.cat((scores,
-                    self.model(masked_inputs[batch_size*i:batch_size*(i+1),...])))
+
+            scores = []
+
+            for t in dataloader:
+                scores.append(self.model(t))
+   
+        scores = torch.cat(scores, dim=0)
         # for each masked input image calculate the increase in logit value
         tscores = torch.Tensor([i - pred[0, class_index].item() for i in scores[:, class_index]])
         # Normalize so that they sum to 1.
@@ -291,13 +326,14 @@ class ClassActivationMaps:
         cam_map = cam_map.squeeze(0).squeeze(0)
 
         # Normalize
-        #cam_map -= cam_map.min()
-        cam_map /= (cam_map.max() + 1e-09)
+        cam_map -= cam_map.min()
+        cam_map /= (cam_map.max() + 1e-05)
 
         return cam_map
 
 
-    def show_cam(self, tensor, f_name, class_index=None, method='gradcam'):
+    def show_cam(self, tensor, class_index=None, method='gradcam', path=None):
+
         """
             display class_activation_map generated by specified method
         """
@@ -306,21 +342,26 @@ class ClassActivationMaps:
         plt.axis('off')
         # plot CAM
         class_activation_map = self.get_cam(tensor, method, class_index)
-        img = postprocess(tensor)
+        img = postprocess(tensor.mean(dim=0, keepdim=True))
         # plot input image
         plt.imshow(class_activation_map, cmap='jet')
         plt.imshow(img, alpha=0.5)
         # save overlapping output
-        f_n, _ = f_name.split('.')
-        plt.savefig(f'../test/{f_n}_{method}', bbox_inches='tight')
-        plt.show()
-        #plt.cla()
+        if path:
+            try:
+                plt.savefig(path, bbox_inches='tight')
+            except:
+                print(f'invalid path {path}')
+        #plt.show()
+        plt.cla()
 
 if __name__ == '__main__':
-    #cnn = torchvision.models.resnet34(pretrained=True)
-    cnn = torch.hub.load('pytorch/vision:v0.6.0', 'shufflenet_v2_x1_0', pretrained=True)
-    FILE = 'church.JPEG'
+    from utils import noisy_inputs
+    cnn = torchvision.models.googlenet(pretrained=True)
+    #cnn = torch.hub.load('pytorch/vision:v0.6.0', 'shufflenet_v2_x1_0', pretrained=True)
+    FILE = 'cat_dog.png'
     image = read_image(os.getcwd() +'/images/'+ FILE)
+    images = noisy_inputs(image, std=0.1, num_imgs=50)
     cam = ClassActivationMaps(cnn)
-    cam.show_cam(image, FILE, method='cam')
+    cam.show_cam(image, method='gradcam++', class_index=243, path='noise')
         

@@ -1,4 +1,5 @@
 import torch
+from torch.utils.data import DataLoader
 from scipy.ndimage.filters import gaussian_filter1d
 import torchvision.transforms as transforms
 from PIL import Image, ImageEnhance
@@ -110,9 +111,51 @@ def clamp(t):
         t.data[0, c, :].clamp_(min=low, max=high)
     return t
 
+def intergrated_inputs(image, num_steps, baseline):
+
+    '''
+        Generate points along the straightline path from baseline to the input image.
+    '''
+    if baseline != 0:
+        assert (baseline.shape == t.shape),\
+             f"baseline shape must match input shape, got baseline with shape {baseline.shape}"
+
+    images = []
+
+    for i in range(num_steps):
+        images.append(
+            baseline + (image - baseline) * (i / num_steps)
+            )
+
+    images = torch.cat(images, dim=0)
+
+    return images
+
+def noisy_inputs(image, std, num_imgs):
+
+    '''
+        Generate noisy images with gaussian noise
+    '''
+    add_noise = lambda t, std: t + torch.randn(t.size()) * std
+
+    images = []
+
+    for _ in range(num_imgs):
+        images.append(
+            add_noise(image, std)
+            )
+
+    images = torch.cat(images, dim=0)
+
+    return images
+
+def get_dataloader(images, batch_size=32):
+
+    return DataLoader(images, batch_size=batch_size)
+
 if __name__ == '__main__':
 
-    t = torch.randn((1 , 1, 4, 4))
-    print(t)
-    t = blur(t, sigma=0.5)
-    print(t)
+    t = torch.randn((72, 1, 4, 4))
+    data = get_dataloader(t)
+    for batch in data:
+        print(batch.shape)
