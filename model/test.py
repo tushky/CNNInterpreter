@@ -1,3 +1,7 @@
+'''
+Created By : Tushar Gadhiya
+'''
+
 import os
 import torchvision
 from utils import read_image
@@ -28,7 +32,7 @@ for method in ['smooth']:
         f_n = image_name.split('.')[0]
         save_path = os.getcwd() +'/results/' + f_n + '_' + method + '_' + model
         saliency.show_map(image, method=method, path=save_path)
-'''
+
 cnn = torchvision.models.vgg16(pretrained=True)
 print(cnn)
 
@@ -42,7 +46,7 @@ for guided in [True]:
         save_path = os.getcwd() +'/results/' + f_n + '_' + str(guided) + '_' + model
         deconv.show_maps(image, 28, num_kernels=1, path=save_path)
 
-'''
+
 from utils import postprocess
 import matplotlib.pyplot as plt
 for image_name in os.listdir('./images'):
