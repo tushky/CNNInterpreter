@@ -15,7 +15,23 @@ from utils import read_image, intergrated_inputs, noisy_inputs
 class SensitivityMaps:
 
     """
-    Collection of sensitivity based methods
+        Collection of Sensitivity Map based methods. It computes gradients of the
+        input with respect to the class score.
+        It supports three methods
+            - Vanilla Saliency Map
+            - Integrated Gradients
+            - Smooth Gradients (SmoothGrad)
+        Args:
+            model (nn.Module): any pretrained convolutional neural network.
+                Deconvoltion Netowork can be generated for model which contains only
+                Conv, Maxpool, ReLU or Batchnorm layer.
+                We assume that all feature extracting layers are in model.features dict
+        Example::
+
+            model = torchvision.models.vgg16(pretrained=True)
+            image = read_image('test.img')
+            net = SensitivityMaps(model)
+            net.show_map(img, method='smooth', colored=False)
     """
 
     def __init__(self, cnn):
